@@ -71,7 +71,14 @@ PHRASES = {
     ".в": "Че вове?",
     ".я": "Че я?",
     ".х": "Че хомяку?",
+    ".крест": "Че крестному в церкви?",
+    ".батя": "Че бате в шланг с дерьмом?",
+    ".пилон": "Че маме на пилоне?",
+    ".трус": "Че малышом в трусах?",
+    ".подгуз": "Че с говном в подгузниках?",
 }
+
+MASS_PHRASES = [v for k, v in PHRASES.items() if k != ".з"]
 
 TRIGGER_WORDS = [
     "шлюхи", "шлюха", "сын", "пидора", "уебок", 
@@ -80,7 +87,6 @@ TRIGGER_WORDS = [
 
 user_cooldowns = {}
 
-# --- СТАРТ ---
 @dp.message(CommandStart())
 async def cmd_start(message: Message):
     if message.from_user.id == OWNER_ID:
@@ -89,13 +95,29 @@ async def cmd_start(message: Message):
             "Вы имеете полный доступ к командам.\n\n"
             "💬 <b>Команды:</b>\n"
             "• <code>.трольмод @юзер</code> — заспамить оскорблениями\n"
-            "• <code>.п, .м, .д, .б, .мам, .з, .к, .с, .в, .я, .х</code> — твои фразы",
+            "• <code>.выброс</code> — высыпать все 'Че...' фразы\n"
+            "• <code>.п, .м, .д, .б, .мам, .з, .к, .с, .в, .я, .х</code> — твои фразы\n"
+            "• <code>.крест, .батя, .пилон, .трус, .подгуз</code> — новые фразы",
             parse_mode="HTML"
         )
     else:
         await message.reply("⛔ Доступ запрещен.")
 
-# --- ТРОЛЛЬМОД ---
+@dp.message(F.text.lower() == ".выброс")
+async def mass_drop(message: Message):
+    if message.from_user.id != OWNER_ID:
+        return
+
+    random.shuffle(MASS_PHRASES)
+    
+    for phrase in MASS_PHRASES:
+        try:
+            await message.answer(phrase)
+            await asyncio.sleep(0.2) # КД 0.2 СЕК
+        except Exception as e:
+            logging.error(f"Ошибка выброса: {e}")
+            break
+
 @dp.message(F.text.lower().startswith(".трольмод"))
 async def troll_mode(message: Message):
     if message.from_user.id != OWNER_ID:
@@ -109,26 +131,24 @@ async def troll_mode(message: Message):
     target_username = args[1].replace("@", "")
     target_tag = f"@{target_username}"
     
-    # Перемешиваем список
     random.shuffle(TROLL_RESPONSES)
     
     for response in TROLL_RESPONSES:
         try:
             text_to_send = response.format(name=target_tag)
             await message.answer(text_to_send, parse_mode="HTML")
-            await asyncio.sleep(0.25) # КД 0.25 СЕК
+            await asyncio.sleep(0.2) # КД 0.2 СЕК
         except Exception as e:
             logging.error(f"Ошибка спама: {e}")
             break
 
-# --- ФРАЗЫ И АВТОТРОЛЛИНГ ---
 @dp.message(F.text)
 async def handler(message: Message):
     if message.from_user.id == OWNER_ID:
         text = message.text.lower().strip()
         now = time.time()
         if message.from_user.id in user_cooldowns:
-            if now - user_cooldowns[message.from_user.id] < 0.25:
+            if now - user_cooldowns[message.from_user.id] < 0.2:
                 return
         user_cooldowns[message.from_user.id] = now
 
@@ -139,13 +159,12 @@ async def handler(message: Message):
                 logging.error(f"Ошибка: {e}")
         return
 
-    # Автотроллинг на слова
     text = message.text.lower()
     for word in TRIGGER_WORDS:
         if word in text:
             now = time.time()
             if "last_troll" in user_cooldowns:
-                if now - user_cooldowns["last_troll"] < 0.25: # ТУТ ТОЖЕ 0.25
+                if now - user_cooldowns["last_troll"] < 0.2:
                     return
             user_cooldowns["last_troll"] = now
 
@@ -159,7 +178,7 @@ async def handler(message: Message):
             return
 
 async def main():
-    logging.info("🚀 Тролль-бот запущен (КД 0.25 сек).")
+    logging.info("🚀 Тролль-бот запущен (КД 0.2 сек).")
     try:
         await bot.delete_webhook(drop_pending_updates=True)
     except Exception:
