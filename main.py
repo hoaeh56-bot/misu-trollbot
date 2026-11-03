@@ -17,6 +17,7 @@ bot = Bot(token=config.BOT_TOKEN, session=session)
 dp = Dispatcher()
 
 OWNER_ID = 1780243499
+IS_SPAMMING = False  # Флаг для остановки спама
 
 # --- БАЗА ОСКОРБЛЕНИЙ ---
 TROLL_RESPONSES = [
@@ -67,7 +68,7 @@ TROLL_RESPONSES = [
     "{name}, я чисто прямо сейчас уже оплачиваю лечение шлюхи.",
     "{name}, твоя мать оценивает себя в жалкие 15 рублей, какая же она тупая шалава.",
     "{name}, ты ебаный пузатый свин, который был мертворожденным хуесосом.",
-    "{name}, по чудесным обстоятельствам твоя мать настолько хорошо мне отсоса́ла, что я твой бог решил воскресить ебучего гомункула.",
+    "{name}, по чудесным обстоятельствам твоя мать настолько хорошо мне отсосала, что я твой бог решил воскресить ебучего гомункула.",
     "{name}, найди повод не отлизать мое небритое очко, тупой ты пидорас.",
     "{name}, я сразу же ебну твоей пьяной беззубой матери лопатой по ее косоеблищей свинорыльновытянутой роже.",
     "{name}, она отправится к твоей прабабке, то есть в ад нахуй.",
@@ -244,6 +245,9 @@ PHRASES = {
     ".подгуз": "Че с говном в подгузниках?",
     ".ебырь": "Че ебырю с хуя?",
     ".бог": "Че мне богу?",
+    ".мать": "Убей мать словом",
+    ".зареж": "Зарежу батю словом",
+    ".река": "Утони в реке словом",
 }
 
 MASS_PHRASES = [v for k, v in PHRASES.items() if k != ".з"]
@@ -263,61 +267,87 @@ async def cmd_start(message: Message):
             "👑 <b>Добро пожаловать, Владелец!</b>\n"
             "Вы имеете полный доступ к командам.\n\n"
             "💬 <b>Команды:</b>\n"
-            "• <code>.трольмод @юзер</code> — заспамить оскорблениями\n"
+            "• <code>.троль @юзер 5</code> — отправить N оскорблений\n"
             "• <code>.выброс</code> — высыпать все 'Че...' фразы\n"
-            "• <code>.комбо @юзер</code> — заспамить оскорблениями + выброс\n"
+            "• <code>.комбо @юзер</code> — оскорбления + выброс\n"
+            "• <code>.стоп</code> — остановить спам\n"
             "• <code>.п, .м, .д, .б, .мам, .з, .к, .с, .в, .я, .х</code> — старые фразы\n"
-            "• <code>.крест, .батя, .пилон, .трус, .подгуз, .ебырь, .бог</code> — новые фразы",
+            "• <code>.крест, .батя, .пилон, .трус, .подгуз, .ебырь, .бог, .мать, .зареж, .река</code> — новые фразы",
             parse_mode="HTML"
         )
     else:
         await message.reply("⛔ Доступ запрещен.")
 
+# --- СТОП ---
+@dp.message(F.text.lower() == ".стоп")
+async def stop_spam(message: Message):
+    global IS_SPAMMING
+    if message.from_user.id != OWNER_ID:
+        return
+    IS_SPAMMING = False
+    await message.reply("🛑 Спам остановлен.")
+
 # --- МАССОВЫЙ ВЫБРОС ---
 @dp.message(F.text.lower() == ".выброс")
 async def mass_drop(message: Message):
-    if message.from_user.id != OWNER_ID:
+    global IS_SPAMMING
+    if message.from_user.id != OWNER_ID or IS_SPAMMING:
         return
 
+    IS_SPAMMING = True
     random.shuffle(MASS_PHRASES)
     
     for phrase in MASS_PHRASES:
+        if not IS_SPAMMING: break
         try:
             await message.answer(phrase)
-            await asyncio.sleep(0.15) # КД 0.15 СЕК
+            await asyncio.sleep(0.15)
         except Exception as e:
             logging.error(f"Ошибка выброса: {e}")
             break
+    IS_SPAMMING = False
 
-# --- ТРОЛЛЬМОД ---
-@dp.message(F.text.lower().startswith(".трольмод"))
+# --- ТРОЛЛЬМОД (С ВЫБОРОМ КОЛИЧЕСТВА) ---
+@dp.message(F.text.lower().startswith(".троль"))
 async def troll_mode(message: Message):
-    if message.from_user.id != OWNER_ID:
+    global IS_SPAMMING
+    if message.from_user.id != OWNER_ID or IS_SPAMMING:
         return
 
     args = message.text.split()
-    if len(args) < 2:
-        await message.reply("⚠️ Укажи юзернейм: <code>.трольмод @username</code>", parse_mode="HTML")
+    if len(args) < 3:
+        await message.reply("⚠️ Формат: <code>.троль @username 5</code> (где 5 — сколько сообщений отправить)", parse_mode="HTML")
         return
         
     target_username = args[1].replace("@", "")
     target_tag = f"@{target_username}"
     
+    try:
+        count = int(args[2])
+    except ValueError:
+        await message.reply("⚠️ Количество должно быть числом.")
+        return
+
+    IS_SPAMMING = True
     random.shuffle(TROLL_RESPONSES)
     
-    for response in TROLL_RESPONSES:
+    # Берем только нужное количество фраз
+    for response in TROLL_RESPONSES[:count]:
+        if not IS_SPAMMING: break
         try:
             text_to_send = response.format(name=target_tag)
             await message.answer(text_to_send, parse_mode="HTML")
-            await asyncio.sleep(0.15) # КД 0.15 СЕК
+            await asyncio.sleep(0.15)
         except Exception as e:
-            logging.error(f"Ошибка спама: {e}")
+            logging.error(f"Ошибка тролля: {e}")
             break
+    IS_SPAMMING = False
 
 # --- КОМБО ---
 @dp.message(F.text.lower().startswith(".комбо"))
 async def combo_mode(message: Message):
-    if message.from_user.id != OWNER_ID:
+    global IS_SPAMMING
+    if message.from_user.id != OWNER_ID or IS_SPAMMING:
         return
 
     args = message.text.split()
@@ -328,26 +358,33 @@ async def combo_mode(message: Message):
     target_username = args[1].replace("@", "")
     target_tag = f"@{target_username}"
     
+    IS_SPAMMING = True
+    
     # 1. Оскорбления
     random.shuffle(TROLL_RESPONSES)
     for response in TROLL_RESPONSES:
+        if not IS_SPAMMING: break
         try:
             text_to_send = response.format(name=target_tag)
             await message.answer(text_to_send, parse_mode="HTML")
-            await asyncio.sleep(0.15) # КД 0.15 СЕК
+            await asyncio.sleep(0.15)
         except Exception as e:
             logging.error(f"Ошибка комбо (тролль): {e}")
             break
             
     # 2. Выброс
-    random.shuffle(MASS_PHRASES)
-    for phrase in MASS_PHRASES:
-        try:
-            await message.answer(phrase)
-            await asyncio.sleep(0.15) # КД 0.15 СЕК
-        except Exception as e:
-            logging.error(f"Ошибка комбо (выброс): {e}")
-            break
+    if IS_SPAMMING:
+        random.shuffle(MASS_PHRASES)
+        for phrase in MASS_PHRASES:
+            if not IS_SPAMMING: break
+            try:
+                await message.answer(phrase)
+                await asyncio.sleep(0.15)
+            except Exception as e:
+                logging.error(f"Ошибка комбо (выброс): {e}")
+                break
+                
+    IS_SPAMMING = False
 
 # --- ФРАЗЫ И АВТОТРОЛЛИНГ ---
 @dp.message(F.text)
@@ -356,7 +393,7 @@ async def handler(message: Message):
         text = message.text.lower().strip()
         now = time.time()
         if message.from_user.id in user_cooldowns:
-            if now - user_cooldowns[message.from_user.id] < 0.15: # КД 0.15 СЕК
+            if now - user_cooldowns[message.from_user.id] < 0.15:
                 return
         user_cooldowns[message.from_user.id] = now
 
@@ -373,7 +410,7 @@ async def handler(message: Message):
         if word in text:
             now = time.time()
             if "last_troll" in user_cooldowns:
-                if now - user_cooldowns["last_troll"] < 0.15: # КД 0.15 СЕК
+                if now - user_cooldowns["last_troll"] < 0.15:
                     return
             user_cooldowns["last_troll"] = now
 
@@ -387,7 +424,7 @@ async def handler(message: Message):
             return
 
 async def main():
-    logging.info("🚀 Тролль-бот запущен (КД 0.15 сек).")
+    logging.info("🚀 Тролль-бот запущен (КД 0.15 сек, добавлен .троль @user N и .стоп).")
     try:
         await bot.delete_webhook(drop_pending_updates=True)
     except Exception:
